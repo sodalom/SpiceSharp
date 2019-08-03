@@ -79,10 +79,8 @@ namespace SpiceSharp.Components
         /// <returns></returns>
         protected override SetupDataProvider BuildSetupDataProvider(ParameterPool parameters, BehaviorPool behaviors)
         {
-            if (parameters == null)
-                throw new ArgumentNullException(nameof(parameters));
-            if (behaviors == null)
-                throw new ArgumentNullException(nameof(behaviors));
+            parameters.ThrowIfNull(nameof(parameters));
+            behaviors.ThrowIfNull(nameof(behaviors));
             var provider = base.BuildSetupDataProvider(parameters, behaviors);
 
             // Add the controlling source
@@ -90,6 +88,19 @@ namespace SpiceSharp.Components
             provider.Add("control", parameters[ControllingName]);
 
             return provider;
+        }
+
+        /// <summary>
+        /// Clone the current controlled current source
+        /// </summary>
+        /// <param name="data">Instance data.</param>
+        /// <returns></returns>
+        public override Entity Clone(InstanceData data)
+        {
+            var clone = (CurrentControlledCurrentSource)base.Clone(data);
+            if (clone.ControllingName != null && data is ComponentInstanceData cid)
+                clone.ControllingName = cid.GenerateIdentifier(clone.ControllingName);
+            return clone;
         }
     }
 }

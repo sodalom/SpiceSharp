@@ -1,6 +1,7 @@
 ﻿using System;
 using SpiceSharp.Attributes;
 using SpiceSharp.Behaviors;
+using SpiceSharp.Circuits;
 using SpiceSharp.Components.MutualInductanceBehaviors;
 
 namespace SpiceSharp.Components
@@ -57,10 +58,8 @@ namespace SpiceSharp.Components
         /// <returns></returns>
         protected override SetupDataProvider BuildSetupDataProvider(ParameterPool parameters, BehaviorPool behaviors)
         {
-            if (parameters == null)
-                throw new ArgumentNullException(nameof(parameters));
-            if (behaviors == null)
-                throw new ArgumentNullException(nameof(behaviors));
+            parameters.ThrowIfNull(nameof(parameters));
+            behaviors.ThrowIfNull(nameof(behaviors));
 
             // Base execution (will add entity behaviors and parameters for this mutual inductance)
             var data = base.BuildSetupDataProvider(parameters, behaviors);
@@ -74,6 +73,24 @@ namespace SpiceSharp.Components
             data.Add("inductor2", behaviors[InductorName2]);
 
             return data;
+        }
+
+        /// <summary>
+        /// Clone the mutual inductance
+        /// </summary>
+        /// <param name="data">Instance data.</param>
+        /// <returns></returns>
+        public override Entity Clone(InstanceData data)
+        {
+            var clone = (MutualInductance) base.Clone(data);
+            if (data is ComponentInstanceData cid)
+            {
+                if (clone.InductorName1 != null)
+                    clone.InductorName1 = cid.GenerateIdentifier(clone.InductorName1);
+                if (clone.InductorName2 != null)
+                    clone.InductorName2 = cid.GenerateIdentifier(clone.InductorName2);
+            }
+            return clone;
         }
     }
 }

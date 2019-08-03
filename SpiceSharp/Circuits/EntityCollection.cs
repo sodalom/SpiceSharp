@@ -10,7 +10,7 @@ namespace SpiceSharp.Circuits
     /// <summary>
     /// A class that manages a collection of entities.
     /// </summary>
-    public class EntityCollection : IEnumerable<Entity>
+    public class EntityCollection : IEnumerable<Entity>, ICollection<Entity>, ICollection, IReadOnlyCollection<Entity>
     {
         /// <summary>
         /// Private variables
@@ -27,33 +27,6 @@ namespace SpiceSharp.Circuits
         /// Occurs when an entity has been removed from the collection.
         /// </summary>
         public event EventHandler<EntityEventArgs> EntityRemoved;
-
-        /// <summary>
-        /// Gets the comparer for entity identifiers.
-        /// </summary>
-        /// <value>
-        /// The comparer.
-        /// </value>
-        public IEqualityComparer<string> Comparer => _entities.Comparer;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="EntityCollection"/> class.
-        /// </summary>
-        public EntityCollection()
-        {
-            _lock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
-            _entities = new Dictionary<string, Entity>();
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="EntityCollection"/> class.
-        /// </summary>
-        /// <param name="comparer">The <see cref="IEqualityComparer{T}" /> implementation to use when comparing entity names, or <c>null</c> to use the default <see cref="EqualityComparer{T}"/>.</param>
-        public EntityCollection(IEqualityComparer<string> comparer)
-        {
-            _lock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
-            _entities = new Dictionary<string, Entity>(comparer);
-        }
 
         /// <summary>
         /// Search for an entity by its string.
@@ -83,6 +56,14 @@ namespace SpiceSharp.Circuits
         }
 
         /// <summary>
+        /// Gets the comparer for entity identifiers.
+        /// </summary>
+        /// <value>
+        /// The comparer.
+        /// </value>
+        public IEqualityComparer<string> Comparer => _entities.Comparer;
+
+        /// <summary>
         /// The number of entities.
         /// </summary>
         public int Count
@@ -102,6 +83,45 @@ namespace SpiceSharp.Circuits
         }
 
         /// <summary>
+        /// Enumerates the names of all entities in the collection.
+        /// </summary>
+        public IEnumerable<string> Keys => _entities.Keys;
+
+        /// <summary>
+        /// Gets a value indicating whether access to the <see cref="ICollection{T}</see> is synchronized (thread safe).
+        /// </summary>
+        public bool IsSynchronized => true;
+
+        /// <summary>
+        /// Gets an object that can be used to synchronize access to the <see cref="ICollection{T}"/>.
+        /// </summary>
+        public object SyncRoot => this;
+
+        /// <summary>
+        /// Gets a value indicating whether the <see cref="ICollection{T}"/> is read-only.
+        /// </summary>
+        public bool IsReadOnly => false;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EntityCollection"/> class.
+        /// </summary>
+        public EntityCollection()
+        {
+            _lock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
+            _entities = new Dictionary<string, Entity>();
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EntityCollection"/> class.
+        /// </summary>
+        /// <param name="comparer">The <see cref="IEqualityComparer{T}" /> implementation to use when comparing entity names, or <c>null</c> to use the default <see cref="EqualityComparer{T}"/>.</param>
+        public EntityCollection(IEqualityComparer<string> comparer)
+        {
+            _lock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
+            _entities = new Dictionary<string, Entity>(comparer);
+        }
+
+        /// <summary>
         /// Clear all entities in the collection.
         /// </summary>
         public void Clear()
@@ -118,6 +138,26 @@ namespace SpiceSharp.Circuits
         }
 
         /// <summary>
+        /// Add an entity.
+        /// </summary>
+        /// <param name="item">The item to be added.</param>
+        public void Add(Entity item)
+        {
+            item.ThrowIfNull(nameof(item));
+
+            _lock.EnterWriteLock();
+            try
+            {
+                _entities.Add(item.Name, item);
+            }
+            finally
+            {
+                _lock.ExitWriteLock();
+            }
+            OnEntityAdded(new EntityEventArgs(item));
+        }
+
+        /// <summary>
         /// Add one or more entities.
         /// </summary>
         /// <param name="entities">The entities that need to be added.</param>
@@ -126,27 +166,78 @@ namespace SpiceSharp.Circuits
             if (entities == null)
                 return;
             foreach (var entity in entities)
-            {
-                if (entity == null)
-                    throw new ArgumentNullException();
-                OnEntityAdded(new EntityEventArgs(entity));
-
-                _lock.EnterWriteLock();
-                try
-                {
-                    _entities.Add(entity.Name, entity);
-                }
-                finally
-                {
-                    _lock.ExitWriteLock();
-                }
-            }
+                Add(entity);
         }
 
         /// <summary>
         /// Raises the <seealso cref="EntityAdded"/> event.
         /// </summary>
         protected virtual void OnEntityAdded(EntityEventArgs args) => EntityAdded?.Invoke(this, args);
+
+        /// <summary>
+        /// Removes the specified entity from the collection.
+        /// </summary>
+        /// <param name="item">The item to be deleted.</param>
+        /// <returns></returns>
+        public bool Remove(Entity item)
+        {
+            item.ThrowIfNull(nameof(item));
+
+            _lock.EnterUpgradeableReadLock();
+            try
+            {
+                if (!_entities.ContainsValue(item))
+                    return false;
+                _lock.EnterWriteLock();
+                try
+                {
+                    _entities.Remove(item.Name);
+                    return true;
+                }
+                finally
+                {
+                    _lock.ExitWriteLock();
+                }
+            }
+            finally
+            {
+                _lock.ExitUpgradeableReadLock();
+            }
+
+        }
+
+        /// <summary>
+        /// Removes the specified entity from the collection.
+        /// </summary>
+        /// <param name="name">The name of the entity to be deleted.</param>
+        /// <returns></returns>
+        public bool Remove(string name)
+        {
+            name.ThrowIfNull(nameof(name));
+
+            _lock.EnterUpgradeableReadLock();
+            try
+            {
+                if (!_entities.TryGetValue(name, out var entity))
+                    return false;
+
+                _lock.EnterWriteLock();
+                try
+                {
+                    _entities.Remove(name);
+                    OnEntityRemoved(new EntityEventArgs(entity));
+                    return true;
+                }
+                finally
+                {
+                    _lock.ExitWriteLock();
+                }
+            }
+            finally
+            {
+                _lock.ExitUpgradeableReadLock();
+            }
+        }
 
         /// <summary>
         /// Removes the specified entities from the collection.
@@ -157,23 +248,7 @@ namespace SpiceSharp.Circuits
             if (names == null)
                 return;
             foreach (var name in names)
-            {
-                if (name == null)
-                    throw new ArgumentNullException();
-                if (_entities.TryGetValue(name, out var entity))
-                {
-                    _lock.EnterWriteLock();
-                    try
-                    {
-                        _entities.Remove(name);
-                    }
-                    finally
-                    {
-                        _lock.ExitWriteLock();
-                    }
-                    OnEntityRemoved(new EntityEventArgs(entity));
-                }
-            }
+                Remove(name);
         }
 
         /// <summary>
@@ -301,6 +376,58 @@ namespace SpiceSharp.Circuits
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
+        }
+
+        /// <summary>
+        /// Copy the elements to an array.
+        /// </summary>
+        /// <param name="array">The array.</param>
+        /// <param name="index">The starting index.</param>
+        void ICollection.CopyTo(Array array, int index)
+        {
+            array.ThrowIfNull(nameof(array));
+            if (index < 0)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            if (array.Length < index + Count)
+                throw new ArgumentException("Not enough elements in the array");
+
+            foreach (var item in _entities.Values)
+                array.SetValue(item, index++);
+        }
+
+        /// <summary>
+        /// Find out if an entity is contained in this collection.
+        /// </summary>
+        /// <param name="item">The entity.</param>
+        /// <returns></returns>
+        public bool Contains(Entity item)
+        {
+            _lock.EnterReadLock();
+            try
+            {
+                return _entities.ContainsValue(item);
+            }
+            finally
+            {
+                _lock.ExitReadLock();
+            }
+        }
+
+        /// <summary>
+        /// Copy the elements to an array.
+        /// </summary>
+        /// <param name="array">The array.</param>
+        /// <param name="arrayIndex">The starting index.</param>
+        public void CopyTo(Entity[] array, int arrayIndex)
+        {
+            array.ThrowIfNull(nameof(array));
+            if (arrayIndex < 0)
+                throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+            if (array.Length < arrayIndex + Count)
+                throw new ArgumentException("Not enough elements in the array");
+
+            foreach (var item in _entities.Values)
+                array[arrayIndex++] = item;
         }
     }
 }

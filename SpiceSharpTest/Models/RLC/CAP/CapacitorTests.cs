@@ -35,6 +35,7 @@ namespace SpiceSharpTest.Models
 
             // Run test
             AnalyzeOp(op, ckt, exports, references);
+            DestroyExports(exports);
         }
 
         [Test]
@@ -64,6 +65,7 @@ namespace SpiceSharpTest.Models
 
             // Run
             AnalyzeTransient(tran, ckt, exports, references);
+            DestroyExports(exports);
         }
 
         [Test]
@@ -99,7 +101,7 @@ namespace SpiceSharpTest.Models
 
             tran.BeforeTemperature += (sender, args) =>
                 {
-                    ((BaseSimulationState)args.State).Temperature = Circuit.CelsiusKelvin + 30.0;
+                    ((BaseSimulationState)args.State).Temperature = Constants.CelsiusKelvin + 30.0;
                 };
 
             Export<double>[] exports = { new RealPropertyExport(tran, "C1", "v") };
@@ -107,6 +109,7 @@ namespace SpiceSharpTest.Models
 
             // Run
             AnalyzeTransient(tran, ckt, exports, references);
+            DestroyExports(exports);
         }
 
         [Test]
@@ -145,7 +148,7 @@ namespace SpiceSharpTest.Models
 
             tran.BeforeTemperature += (sender, args) =>
                 {
-                    ((BaseSimulationState)args.State).Temperature = Circuit.CelsiusKelvin + 30.0;
+                    ((BaseSimulationState)args.State).Temperature = Constants.CelsiusKelvin + 30.0;
                 };
 
             Export<double>[] exports = { new RealPropertyExport(tran, "C1", "v") };
@@ -153,6 +156,7 @@ namespace SpiceSharpTest.Models
 
             // Run
             AnalyzeTransient(tran, ckt, exports, references);
+            DestroyExports(exports);
         }
 
         [Test]
@@ -212,6 +216,7 @@ namespace SpiceSharpTest.Models
 
             // Run test
             AnalyzeAC(ac, ckt, exports, references);
+            DestroyExports(exports);
         }
     }
 }

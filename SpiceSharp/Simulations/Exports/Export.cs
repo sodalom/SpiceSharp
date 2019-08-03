@@ -38,7 +38,35 @@ namespace SpiceSharp.Simulations
         /// <value>
         /// The simulation.
         /// </value>
-        protected Simulation Simulation { get; }
+        public Simulation Simulation
+        {
+            get => _simulation; 
+            set
+            {
+                if (_simulation != null)
+                {
+                    _simulation.AfterSetup -= Initialize;
+                    _simulation.BeforeUnsetup -= Initialize;
+                    Extractor = null;
+                }
+                if (value != null && !IsValidSimulation(value))
+                    throw new ArgumentException("Invalid simulation");
+                _simulation = value;
+                if (_simulation != null)
+                {
+                    _simulation.AfterSetup += Initialize;
+                    _simulation.BeforeUnsetup += Finalize;
+                }
+            }
+        }
+        private Simulation _simulation;
+
+        /// <summary>
+        /// Checks whether or not the simulation is a valid one
+        /// </summary>
+        /// <param name="simulation">The simulation.</param>
+        /// <returns></returns>
+        protected virtual bool IsValidSimulation(Simulation simulation) => true;
 
         /// <summary>
         /// Gets the current value from the simulation.
@@ -72,9 +100,7 @@ namespace SpiceSharp.Simulations
         /// <exception cref="ArgumentNullException">simulation</exception>
         protected Export(Simulation simulation)
         {
-            Simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
-            simulation.AfterSetup += Initialize;
-            simulation.BeforeUnsetup += Finalize;
+            Simulation = simulation;
         }
 
         /// <summary>
@@ -82,9 +108,7 @@ namespace SpiceSharp.Simulations
         /// </summary>
         public virtual void Destroy()
         {
-            Simulation.AfterSetup -= Initialize;
-            Simulation.BeforeUnsetup -= Initialize;
-            Extractor = null;
+            Simulation = null;
         }
 
         /// <summary>
@@ -92,6 +116,9 @@ namespace SpiceSharp.Simulations
         /// </summary>
         protected void LazyLoad()
         {
+            if (_simulation == null)
+                return;
+
             // If we're already too far, emulate a call from the simulation
             if (Simulation.Status == Simulation.Statuses.Setup || Simulation.Status == Simulation.Statuses.Running)
                 Initialize(Simulation, EventArgs.Empty);
